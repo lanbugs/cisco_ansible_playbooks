@@ -1,0 +1,23 @@
+---
+
+# Get list of cisco / polycom phones connected and discovered by CDP
+
+- hosts: all
+  gather_facts: True
+  vars:
+    cli:
+      host: "{{ ansible_host }}"
+      username: "{{ ansible_user }}"
+      password: "{{ ansible_ssh_pass }}"
+    ansible_ssh_common_args: -o StrictHostKeyChecking=no
+
+
+  tasks:
+    - name: Loop over the dictionary
+      lineinfile:
+        path: phone_list.txt
+        line: '{{ inventory_hostname }} - {{ item.key }} - {{ item.value }}'
+        insertafter: EOF
+        create: yes
+      with_dict: "{{ ansible_facts.net_neighbors }}"
+      when: '"SEP" in item.value[0].host'
