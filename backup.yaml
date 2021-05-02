@@ -1,0 +1,39 @@
+---
+
+# Create backups of running config
+
+- hosts: all
+  gather_facts: False
+  vars:
+    cli:
+      host: "{{ ansible_host }}"
+      username: "{{ ansible_user }}"
+      password: "{{ ansible_ssh_pass }}"
+    ansible_ssh_common_args: -o StrictHostKeyChecking=no
+
+
+  tasks:
+    #- name: Add ssh host key to known hosts
+    #  connection: local
+    #  shell: "ssh-keyscan -H {{ ansible_host }} >> ~/.ssh/known_hosts"
+
+    # Backup for IOS devices
+    - name: Get the config from Cisco IOS device
+      ios_command:
+        commands:
+          - show run
+        provider: "{{ cli }}"
+      register: config
+
+    # Create backup folder
+    - name: Create backup folder if not exist ...
+      file:
+        path: "/backups"
+        state: directory
+
+    # Store config
+    - name: Store config to backup folder
+      copy:
+        content: "{{ config.stdout[0] }}"
+        dest: "/backups/{{ inventory_hostname }}.txt"
+        force: yes
