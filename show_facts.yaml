@@ -1,0 +1,15 @@
+---
+
+# Show facts of one device or testgroup for debugging purpose
+
+- hosts: test
+  gather_facts: True
+  vars:
+    cli:
+      host: "{{ ansible_host }}"
+      username: "{{ ansible_user }}"
+      password: "{{ ansible_ssh_pass }}"
+
+  tasks:
+    - name: Show ansible facts
+      debug: var=ansible_facts
