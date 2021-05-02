@@ -1,0 +1,101 @@
+---
+
+# Copy image to switch
+# Depending on hardware model this playbook will copy from http webserver the right image to the switch.
+# You must change the sw / hashes list to your needs.
+# Script like all others without warrenty, please try this in your lab before do any changes in productive environment!
+# You must define also the webserver ip <webserver_with_images>
+
+- hosts: all
+  gather_facts: True
+  vars:
+    cli:
+      host: "{{ ansible_host }}"
+      username: "{{ ansible_user }}"
+      password: "{{ ansible_ssh_pass }}"
+
+    sw:
+      WS-C2960+48PST-L: c2960-lanbasek9-mz.122-55.SE12.bin
+      WS-C2960C-8PC-L: c2960c405-universalk9-mz.152-7.E3.bin
+      WS-C2960C-12PC-L: c2960c405-universalk9-mz.152-7.E3.bin
+      WS-C2960CX-8TC-L: c2960cx-universalk9-mz.152-7.E3.bin
+      WS-C2960L-16PS-LL: c2960l-universalk9-mz.152-7.E3.bin
+      WS-C2960S-24PS-L: c2960s-universalk9-mz.152-2.E9.bin
+      WS-C2960X-48LPS-L: c2960x-universalk9-mz.152-7.E3.bin
+      WS-C3750X-48P: c3750e-universalk9-mz.152-4.E10.bin
+
+    hashes:
+      c2960-lanbasek9-mz.122-55.SE12.bin: 1504e5d9342eabf6f7b2376e94ace46f
+      c2960c405-universalk9-mz.152-7.E3.bin: a6922c642c6c4e9c12e06a21f0d4c89e
+      c2960cx-universalk9-mz.152-7.E3.bin: 31bf3951d1efc28d278a9358496013ff
+      c2960l-universalk9-mz.152-7.E3.bin: bab332918e80fbc2dbf57d638729aab7
+      c2960s-universalk9-mz.152-2.E9.bin: ea604d030b378b6c5c3dda3d501ac2f5
+      c2960x-universalk9-mz.152-7.E3.bin: f148fc860a1d4d08532bc616724e632d
+      c3750e-universalk9-mz.152-4.E10.bin: 6f3b3ddec62c77747c214cc7be555ec4
+
+
+  tasks:
+    - name: Model
+      debug: var=ansible_net_model
+
+    - name: Version
+      debug: var=ansible_net_image
+
+    - name: Target version known
+      set_fact: target_sw="{{ sw[ansible_net_model] }}"
+      when: sw[ansible_net_model] is defined
+
+    - name: Target version unknown
+      set_fact: target_sw="unknown"
+      when: sw[ansible_net_model] is not defined
+
+    - name: Target version is
+      debug: var=target_sw
+
+    - name: Check if target image already exist
+      ios_command:
+        commands: "show flash:"
+        provider: "{{ cli }}"
+      register: ios_flash
+
+    - name: Debug
+      debug: var=ios_flash
+
+    - name: Set file_on_flash to False
+      set_fact: file_on_flash=false
+
+    - name: Find file on flash
+      set_fact: file_on_flash=true
+      with_items: "{{ ios_flash.stdout_lines[0] }}"
+      when:
+        - target_sw in item
+        - target_sw != "unknown"
+
+    - name: Debug
+      debug: var=file_on_flash
+
+    - name: Debug
+      debug: var=target_sw
+
+    ###############################################################################################
+    - name: Execute copy on switch
+      ios_command:
+        commands:
+          - command: "copy http://<webserver_with_images>/images/{{ target_sw }} flash:/{{ target_sw }}"
+            prompt: 'Destination filename [{{ target_sw }}]?'
+            answer: "\r"
+        provider: "{{ cli }}"
+      when:
+        - target_sw != "unknown"
+        - file_on_flash != true
+
+    - name: Execute verify image
+      ios_command:
+        commands:
+          - "verify /md5 flash:{{ target_sw }} {{ hashes[target_sw] }}"
+        provider: "{{ cli }}"
+      register: ios_verify
+      #failed_when: "'Error' in ios_verify.stdout_lines[0]"
+
+    - name: Debug
+      debug: var=ios_verify
