@@ -1,6 +1,6 @@
 ---
 
-# Get list of cisco / polycom phones connected and discovered by CDP
+# Disable power of AP interface and reenable power to reset the Accesspoint
 
 - hosts: all
   gather_facts: True
