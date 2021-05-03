@@ -1,0 +1,58 @@
+---
+
+# Collect interfaces which are access ports, 
+# load mac adresses from file (aaaa.bbbb.cccc format) and check on which interface they are connected,
+# apply configuration to the interfaces where they are connected.
+# MAC addresses are loaded from file mac_list.txt, 1 mac per line in aaaa.bbbb.cccc format
+
+- hosts: all
+  gather_facts: True
+  vars:
+    cli:
+      host: "{{ ansible_host }}"
+      username: "{{ ansible_user }}"
+      password: "{{ ansible_ssh_pass }}"
+
+    access_if: []
+    found_if: []
+
+  tasks:
+    - name: collect ios_facts
+      ios_facts:
+        gather_subset:
+          - '!all'
+          - '!min'
+        gather_network_resources:
+          - l2_interfaces
+
+    - name: Collect access interfaces
+      set_fact:
+        access_if: "{{ access_if }} + [ '{{ item.name }}' ]"
+      with_list: "{{ ansible_network_resources.l2_interfaces }}"
+      when: '"access" in item.mode'
+
+    - name: show on each interface if target mac is there
+      ios_command:
+        commands:
+          - "show mac address-table interface {{ item[0] }} | inc {{ item[1] }}"
+      with_nested:
+        - "{{ access_if }}"
+        - "{{ lookup('file', 'mac_list.txt').splitlines() }}"
+      register: output
+
+    - name: debug
+      debug: var=output
+
+    - name: collect found interfaces
+      set_fact:
+        found_if:  "{{ found_if }} + [ {'interface': '{{ item.item[0] }}', 'mac': '{{ item.item[1] }}' } ]"
+      with_list: "{{ output.results }}"
+      when: item.stdout[0] != ""
+
+    - name: apply config to target interfaces
+      ios_config:
+        lines:
+          - description Camera
+        parents: 'interface {{ item.interface }}'
+        save_when: modified
+      with_list: "{{ found_if }}"
